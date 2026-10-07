@@ -65,7 +65,9 @@ GPU/CPU decode × 8/10-bit × quality/bitrate × each downmix mode.
 ## Conventions
 
 - Standard library only. No pip dependencies, ever — the point is that it runs
-  anywhere ffmpeg does.
+  anywhere ffmpeg does. The one exception is optional: drag-and-drop onto the
+  window uses the `tkdnd` Tcl extension (a distro package) when it's present,
+  and the app works unchanged without it.
 - Comments explain *why*, particularly around ffmpeg's non-obvious behaviour.
 - Desktop scaling: `detect_scale` / `apply_scaling` exist because Tk assumes
   96 DPI. ttk indicator sizes need `indicatorsize` set explicitly; fonts follow

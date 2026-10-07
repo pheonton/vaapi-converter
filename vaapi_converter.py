@@ -560,8 +560,12 @@ class ConverterApp(ttk.Frame):
         ttk.Button(buttons, text="Remove", command=self.remove_selected).pack(side="left", padx=6)
         ttk.Button(buttons, text="Clear", command=self.clear_files).pack(side="left")
 
+        self.drop_hint = ttk.Label(left, text="", foreground="#666")
+        self.drop_hint.grid(row=2, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        self._enable_drop()
+
         destination = ttk.Labelframe(left, text="Save to", padding=8)
-        destination.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        destination.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(10, 0))
         destination.columnconfigure(0, weight=1)
 
         ttk.Checkbutton(destination, text="Next to the original file", variable=self.same_folder,
@@ -793,7 +797,7 @@ class ConverterApp(ttk.Frame):
     def add_files(self):
         self.add_paths(filedialog.askopenfilenames(title="Add files", filetypes=MEDIA_TYPES))
 
-    def add_paths(self, paths):
+    def add_paths(self, paths) -> int:
         """Queue files from the picker, the command line, or a file manager."""
         added = 0
         for raw in paths:
@@ -805,6 +809,34 @@ class ConverterApp(ttk.Frame):
         if added:
             self.status.set(f"{len(self.files)} file(s) queued.")
             self._update_preview()
+        return added
+
+    def _enable_drop(self):
+        # Tk can't receive files dropped from other apps on its own. tkdnd is a
+        # Tcl extension shipped as a distro package (not pip), so it's optional.
+        # tkdnd 2.6 (still Debian's) only resolves the toplevel's direct child
+        # under the pointer, which is this frame; newer versions find the
+        # deepest widget, i.e. the list. Register both.
+        targets = (str(self), str(self.listbox))
+        try:
+            self.tk.call("package", "require", "tkdnd")
+            for target in targets:
+                self.tk.call("tkdnd::drop_target", "register", target, "DND_Files")
+        except tk.TclError:
+            self.drop_hint.config(text="Install the tkdnd package to drop files onto this list.")
+            return
+        # tkdnd substitutes %D itself, as one Tcl list (paths with spaces come
+        # braced), and takes the script's result as the drop action.
+        handler = self.register(self._on_drop)
+        for target in targets:
+            self.tk.call("bind", target, "<<Drop>>", f"{handler} %D")
+        self.drop_hint.config(text="Drop video files onto the list to add them.")
+
+    def _on_drop(self, data: str) -> str:
+        paths = self.tk.splitlist(data)
+        if not self.add_paths(paths) and any(Path(p).is_dir() for p in paths):
+            self.status.set("Folders can't be dropped — drop the video files inside them.")
+        return "copy"
 
     def remove_selected(self):
         for index in reversed(self.listbox.curselection()):
