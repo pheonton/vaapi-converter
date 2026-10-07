@@ -1268,9 +1268,34 @@ class ConverterApp(ttk.Frame):
         except (ValueError, OSError, subprocess.SubprocessError):
             return 0.0
 
+    def _probe_frame_rate(self, src: Path) -> float:
+        """Source fps, used to turn ffmpeg's frame count into a percentage.
+
+        Needed because ffmpeg's own out_time progress field stalls at N/A for
+        most of the run whenever a sparse stream is mapped alongside it (PGS
+        subtitles are the common case) — frame count keeps advancing.
+        """
+        probe = self.ffprobe.get() or shutil.which("ffprobe")
+        if not probe:
+            return 0.0
+        try:
+            out = subprocess.run(
+                [probe, "-v", "error", "-select_streams", "v:0",
+                 "-show_entries", "stream=avg_frame_rate,r_frame_rate",
+                 "-of", "default=nw=1:nk=1", str(src)],
+                capture_output=True, text=True, timeout=30, creationflags=NO_WINDOW)
+            for line in out.stdout.strip().splitlines():
+                num, _, den = line.partition("/")
+                if int(den or 1) and (int(num) or 0):
+                    return int(num) / int(den or 1)
+        except (ValueError, OSError, subprocess.SubprocessError):
+            pass
+        return 0.0
+
     def _run_one(self, src: Path, dst: Path) -> bool:
         dst.parent.mkdir(parents=True, exist_ok=True)
         duration = self._probe_duration(src)
+        total_frames = duration * self._probe_frame_rate(src)
         reencoding = codec_from_label(self.vcodec.get()) not in ("copy", "")
 
         # Try as configured, then step down one capability at a time rather than
@@ -1291,13 +1316,14 @@ class ConverterApp(ttk.Frame):
             previous = cmd
             if reason:
                 self.events.put(("log", f"[retry] {src.name}: {reason}."))
-            if self._execute(cmd, src, dst, duration):
+            if self._execute(cmd, src, dst, duration, total_frames):
                 return True
             if self.cancelled:
                 return False
         return False
 
-    def _execute(self, cmd: list[str], src: Path, dst: Path, duration: float) -> bool:
+    def _execute(self, cmd: list[str], src: Path, dst: Path, duration: float,
+                 total_frames: float = 0) -> bool:
         self.events.put(("log", "$ " + " ".join(cmd)))
         self.events.put(("file", 0))
 
@@ -1309,12 +1335,18 @@ class ConverterApp(ttk.Frame):
             line = line.strip()
             if not line:
                 continue
-            if line.startswith("out_time="):
+            if total_frames > 0 and line.startswith("frame="):
+                try:
+                    frame = int(line.split("=", 1)[1])
+                    self.events.put(("file", min(frame / total_frames * 100, 100)))
+                except ValueError:
+                    pass
+            elif total_frames <= 0 and line.startswith("out_time="):
                 if duration > 0:
                     seconds = hms_to_seconds(line.split("=", 1)[1])
                     self.events.put(("file", min(seconds / duration * 100, 100)))
             elif line.startswith(("frame=", "fps=", "bitrate=", "total_size=", "speed=",
-                                  "out_time_ms=", "out_time_us=", "dup_frames=",
+                                  "out_time=", "out_time_ms=", "out_time_us=", "dup_frames=",
                                   "drop_frames=", "stream_", "progress=")):
                 continue
             else:
