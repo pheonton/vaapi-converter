@@ -51,12 +51,6 @@ fi
 
 [[ $missing -eq 1 ]] && { echo; echo "Install the missing pieces, then run this again." >&2; exit 1; }
 
-# A failed require makes Tcl scan its package indexes, so this works without a display.
-if ! python3 -c "import sys, tkinter; t = tkinter.Tcl(); t.eval('catch {package require __probe__}'); sys.exit(not t.eval('package versions tkdnd'))" 2>/dev/null; then
-    echo "Note: tkdnd isn't installed, so files can't be dropped onto the window." >&2
-    echo "      It's optional; install the tkdnd package to enable it." >&2
-fi
-
 # --- install ---------------------------------------------------------------
 mkdir -p "$BIN_DIR" "$DESKTOP_DIR" "$ICON_DIR"
 

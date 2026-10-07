@@ -31,10 +31,6 @@ here runs on the GPU, and there is no software encoder path at all.
 - Python 3.8+ with tkinter (`python3-tk` on Debian/Ubuntu, `python3-tkinter` on
   Fedora, `tk` on Arch)
 - `ffmpeg` and `ffprobe` built with VAAPI support
-- Optional: `tkdnd` to drag files onto the window. On Debian/Ubuntu use
-  `apt install --no-install-recommends tkdnd`; without the flag apt also pulls
-  in Pure Data, which the package recommends. Without tkdnd, add files with the
-  button, or drop them onto the launcher icon.
 
 Check your GPU's capabilities with `vainfo`, or just run the app — it reports
 which VAAPI encoders your ffmpeg build has and refuses to start if there are
